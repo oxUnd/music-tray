@@ -11,14 +11,24 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, Paragraph},
     Frame, Terminal,
 };
+
+use ratatui_image::{
+    picker::Picker,
+    StatefulImage,
+    protocol::StatefulProtocol,
+};
+
+use image;
+
 use std::{
-    io,
+    io::{self, BufReader},
+    fs,
     time::{Duration, Instant},
     collections::HashMap,
     fs::OpenOptions,
     path::Path,
 };
-use viuer;
+
 use log::{info, error};
 
 mod music;
@@ -87,7 +97,9 @@ struct App {
     music_player: MusicPlayer,
     should_quit: bool,
     button_positions: HashMap<String, (u16, u16, u16, u16)>, // button_name -> (x, y, width, height)
-    image_display_enabled: bool, // Track if terminal supports image display
+    image: Option<Box<dyn StatefulProtocol>>,
+    picker: Option<Picker>,
+    current_cover_url: Option<String>,
 }
 
 impl App {
@@ -96,13 +108,121 @@ impl App {
             music_player: MusicPlayer::new(),
             should_quit: false,
             button_positions: HashMap::new(),
-            image_display_enabled: viuer::is_iterm_supported(),
+            image: None,
+            picker: None,
+            current_cover_url: None,
         }
     }
 
     fn on_tick(&mut self) {
         // Update music player state
         self.music_player.update();
+        
+        // Update image if cover URL changed
+        self.update_cover_image();
+    }
+
+    fn update_cover_image(&mut self) {
+        let track_info = self.music_player.get_current_track();
+        
+        // Check if cover URL has changed
+        let cover_url_changed = self.current_cover_url.as_ref() != track_info.cover_url.as_ref();
+        
+        if let Some(cover_url) = &track_info.cover_url {
+            if cover_url_changed {
+                info!("Cover URL changed to: {}", cover_url);
+                
+                // Initialize picker if not already done
+                if self.picker.is_none() {
+                    match Picker::from_termios() {
+                        Ok(picker) => {
+                            self.picker = Some(picker);
+                            info!("Initialized image picker");
+                        }
+                        Err(e) => {
+                            error!("Failed to initialize image picker: {}", e);
+                            return;
+                        }
+                    }
+                }
+                
+                // Load image if URL changed
+                if let Some(file_path) = self.extract_file_path(cover_url) {
+                    info!("Attempting to load image from: {}", file_path);
+                    
+                    if let Some(ref mut picker) = self.picker {
+                        match fs::File::open(&file_path) {
+                            Ok(file) => {
+                                let reader = image::io::Reader::new(BufReader::new(file)).with_guessed_format();
+                                match reader {
+                                    Ok(reader) => {
+                                        let format = reader.format();
+                                        info!("Detected image format: {:?} for file: {}", format, file_path);
+                                        
+                                        match reader.decode() {
+                                            Ok(dyn_img) => {
+                                                let image = picker.new_resize_protocol(dyn_img);
+                                                self.image = Some(image);
+                                                self.current_cover_url = Some(cover_url.clone());
+                                                info!("Successfully loaded cover image: {} (format: {:?})", file_path, format);
+                                            }
+                                            Err(e) => {
+                                                error!("Failed to decode image: {} (detected format: {:?}), error: {}", file_path, format, e);
+                                                self.image = None;
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to create image reader: {} {}", file_path, e);
+                                        self.image = None;
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to open image file: {} {}", file_path, e);
+                                self.image = None;
+                            }
+                        }
+                    } else {
+                        error!("Failed to initialize image picker");
+                        self.image = None;
+                        self.current_cover_url = None;
+                    }
+
+                } else {
+                    info!("Cover URL is not a file:// URL, skipping image loading");
+                    self.image = None;
+                    self.current_cover_url = None;
+                }
+            }
+        } else {
+            if self.current_cover_url.is_some() {
+                info!("No cover URL available, clearing image");
+                self.image = None;
+                self.current_cover_url = None;
+            }
+        }
+    }
+
+    fn extract_file_path(&self, url: &str) -> Option<String> {
+        if url.starts_with("file://") {
+            let path = url.trim_start_matches("file://");
+            // URL decode the path to handle Chinese characters and other encoded characters
+            match urlencoding::decode(path) {
+                Ok(decoded_path) => Some(decoded_path.to_string()),
+                Err(_) => {
+                    // If URL decoding fails, try basic replacements for common cases
+                    let basic_decoded = path
+                        .replace("%20", " ")
+                        .replace("%2F", "/")
+                        .replace("%5C", "\\")
+                        .replace("%3A", ":");
+                    Some(basic_decoded)
+                }
+            }
+        } else {
+            None
+        }
     }
 
     fn on_key(&mut self, key: KeyCode) {
@@ -221,31 +341,52 @@ fn ui(f: &mut Frame, app: &mut App) {
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
         .split(chunks[1]);
 
-    // Cover art area (left side) - Show simple placeholder for now
-    let cover_content = if app.music_player.get_current_track().cover_url.is_some() {
-        if app.image_display_enabled {
-            "🖼️\n\nImage Display\nSupported\n\n🖼️".to_string()
+    // Cover art area (left side)
+    let cover_title = "🎨 Cover Art";
+    
+    // Create the cover block with title and borders
+    let cover_block = Block::default()
+        .borders(Borders::ALL)
+        .title(cover_title)
+        .title_style(Style::default().fg(Color::Yellow));
+    
+    // Get the inner area for content (excluding borders and title)
+    let inner_area = cover_block.inner(main_chunks[0]);
+    
+    if let Some(ref mut image_protocol) = app.image {
+        // Render the loaded image in the inner area
+        let image_widget = StatefulImage::new(None);
+        f.render_stateful_widget(image_widget, inner_area, image_protocol);
+    } else {
+        // Show placeholder when no image is available
+        let track_info = app.music_player.get_current_track();
+        let placeholder_text = if track_info.cover_url.is_some() {
+            if app.picker.is_some() {
+                if let Some(ref current_url) = app.current_cover_url {
+                    if current_url == track_info.cover_url.as_ref().unwrap() {
+                        "🎵\n\nFailed to Load\nCover Image\n\n🎵"
+                    } else {
+                        "🎵\n\nLoading Cover...\n\n🎵"
+                    }
+                } else {
+                    "🎵\n\nLoading Cover...\n\n🎵"
+                }
+            } else {
+                "🎵\n\nInitializing\nImage Picker...\n\n🎵"
+            }
         } else {
-            "🖼️\n\nImage Display\nNot Supported\n\n🖼️".to_string()
-        }
-    } else {
-        "🎵\n\nNo Cover\nAvailable\n\n🎵".to_string()
-    };
+            "🎵\n\nNo Cover\nAvailable\n\n🎵"
+        };
+        
+        let placeholder_paragraph = Paragraph::new(placeholder_text)
+            .style(Style::default().fg(Color::Blue))
+            .alignment(Alignment::Center);
+        f.render_widget(placeholder_paragraph, inner_area);
+    }
     
-    let cover_title = if app.image_display_enabled {
-        "🎨 Cover Art (Image Display)"
-    } else {
-        "🎨 Cover Art (Text Mode)"
-    };
-    
-    let cover_block = Paragraph::new(cover_content)
-        .style(Style::default().fg(Color::Blue))
-        .alignment(Alignment::Center)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .title(cover_title)
-            .title_style(Style::default().fg(Color::Yellow)));
+    // Render the block with borders and title
     f.render_widget(cover_block, main_chunks[0]);
+
 
     // Track info area (right side)
     let track_info = app.music_player.get_current_track();
@@ -265,7 +406,16 @@ fn ui(f: &mut Frame, app: &mut App) {
     let connection_status = if app.music_player.is_connected() {
         if let Some(player) = app.music_player.get_current_player() {
             let player_name = player.identity();
-            format!("🔗 Connected to: {}", player_name)
+            let cover_info = if let Some(cover_url) = &track_info.cover_url {
+                if cover_url.starts_with("file://") {
+                    format!("🔗 Connected to: {}\n📁 Cover: {}", player_name, cover_url)
+                } else {
+                    format!("🔗 Connected to: {}\n🌐 Cover: {}", player_name, cover_url)
+                }
+            } else {
+                format!("🔗 Connected to: {}", player_name)
+            };
+            cover_info
         } else {
             "🔗 Connected (No active player)".to_string()
         }
