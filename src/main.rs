@@ -329,7 +329,7 @@ fn ui(f: &mut Frame, app: &mut App) {
         .split(f.area());
 
     // Title
-    let title = Paragraph::new("🎵 Music Tray")
+    let title = Paragraph::new("♪ Music Tray")
         .style(Style::default().fg(Color::Yellow))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
@@ -342,7 +342,7 @@ fn ui(f: &mut Frame, app: &mut App) {
         .split(chunks[1]);
 
     // Cover art area (left side)
-    let cover_title = "🎨 Cover Art";
+    let cover_title = "Cover Art";
     
     // Create the cover block with title and borders
     let cover_block = Block::default()
@@ -364,18 +364,18 @@ fn ui(f: &mut Frame, app: &mut App) {
             if app.picker.is_some() {
                 if let Some(ref current_url) = app.current_cover_url {
                     if current_url == track_info.cover_url.as_ref().unwrap() {
-                        "🎵\n\nFailed to Load\nCover Image\n\n🎵"
+                        "♪\n\nFailed to Load\nCover Image\n\n♪"
                     } else {
-                        "🎵\n\nLoading Cover...\n\n🎵"
+                        "♪\n\nLoading Cover...\n\n♪"
                     }
                 } else {
-                    "🎵\n\nLoading Cover...\n\n🎵"
+                    "♪\n\nLoading Cover...\n\n♪"
                 }
             } else {
-                "🎵\n\nInitializing\nImage Picker...\n\n🎵"
+                "♪\n\nInitializing\nImage Picker...\n\n♪"
             }
         } else {
-            "🎵\n\nNo Cover\nAvailable\n\n🎵"
+            "♪\n\nNo Cover\nAvailable\n\n♪"
         };
         
         let placeholder_paragraph = Paragraph::new(placeholder_text)
@@ -408,43 +408,43 @@ fn ui(f: &mut Frame, app: &mut App) {
             let player_name = player.identity();
             let cover_info = if let Some(cover_url) = &track_info.cover_url {
                 if cover_url.starts_with("file://") {
-                    format!("🔗 Connected to: {}\n📁 Cover: {}", player_name, cover_url)
+                    format!("[+] Connected to: {}\n[F] Cover: {}", player_name, cover_url)
                 } else {
-                    format!("🔗 Connected to: {}\n🌐 Cover: {}", player_name, cover_url)
+                    format!("[+] Connected to: {}\n[W] Cover: {}", player_name, cover_url)
                 }
             } else {
-                format!("🔗 Connected to: {}", player_name)
+                format!("[+] Connected to: {}", player_name)
             };
             cover_info
         } else {
-            "🔗 Connected (No active player)".to_string()
+            "[+] Connected (No active player)".to_string()
         }
     } else {
-        "❌ Not connected to D-Bus".to_string()
+        "[-] Not connected to D-Bus".to_string()
     };
     
     let status_block = Paragraph::new(connection_status)
         .style(Style::default().fg(Color::Green))
-        .block(Block::default().borders(Borders::ALL).title("🔌 Status"));
+        .block(Block::default().borders(Borders::ALL).title("Status"));
     f.render_widget(status_block, track_chunks[0]);
 
     // Track name with play status
-    let play_status = if track_info.is_playing { "▶️" } else { "⏸️" };
+    let play_status = if track_info.is_playing { ">" } else { "||" };
     let track_name = Paragraph::new(format!("{} {}", play_status, track_info.title.as_deref().unwrap_or("Unknown")))
         .style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
-        .block(Block::default().borders(Borders::ALL).title("🎵 Track"));
+        .block(Block::default().borders(Borders::ALL).title("Track"));
     f.render_widget(track_name, track_chunks[1]);
 
     // Artist
     let artist = Paragraph::new(track_info.artist.as_deref().unwrap_or("Unknown Artist"))
         .style(Style::default().fg(Color::Cyan))
-        .block(Block::default().borders(Borders::ALL).title("🎤 Artist"));
+        .block(Block::default().borders(Borders::ALL).title("Artist"));
     f.render_widget(artist, track_chunks[2]);
 
     // Album
     let album = Paragraph::new(track_info.album.as_deref().unwrap_or("Unknown Album"))
         .style(Style::default().fg(Color::Magenta))
-        .block(Block::default().borders(Borders::ALL).title("💿 Album"));
+        .block(Block::default().borders(Borders::ALL).title("Album"));
     f.render_widget(album, track_chunks[3]);
 
     // Progress bar with time display
@@ -461,7 +461,7 @@ fn ui(f: &mut Frame, app: &mut App) {
     let progress_gauge = Gauge::default()
         .block(Block::default()
             .borders(Borders::ALL)
-            .title(format!("⏱️  Progress ({})", progress_text)))
+            .title(format!("Progress ({})", progress_text)))
         .gauge_style(Style::default().fg(Color::Green))
         .percent(progress);
     f.render_widget(progress_gauge, track_chunks[4]);
@@ -488,30 +488,30 @@ fn ui(f: &mut Frame, app: &mut App) {
         (control_chunks[3].x, control_chunks[3].y, control_chunks[3].width, control_chunks[3].height));
 
     // Previous button
-    let prev_button = Paragraph::new("⏮️ Previous")
-        .style(Style::default().fg(Color::White).bg(Color::Blue))
+    let prev_button = Paragraph::new("<< Previous")
+        .style(Style::default().fg(Color::Blue))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).title("P"));
     f.render_widget(prev_button, control_chunks[0]);
 
     // Play/Pause button
-    let play_pause_text = if track_info.is_playing { "⏸️ Pause" } else { "▶️ Play" };
+    let play_pause_text = if track_info.is_playing { "|| Pause" } else { "> Play" };
     let play_pause_button = Paragraph::new(play_pause_text)
-        .style(Style::default().fg(Color::White).bg(Color::Green))
+        .style(Style::default().fg(Color::Red))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).title("SPACE"));
     f.render_widget(play_pause_button, control_chunks[1]);
 
     // Next button
-    let next_button = Paragraph::new("Next ⏭️")
-        .style(Style::default().fg(Color::White).bg(Color::Blue))
+    let next_button = Paragraph::new("Next >>")
+        .style(Style::default().fg(Color::Green))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).title("N"));
     f.render_widget(next_button, control_chunks[2]);
 
     // Quit button
-    let quit_button = Paragraph::new("❌ Quit")
-        .style(Style::default().fg(Color::White).bg(Color::Red))
+    let quit_button = Paragraph::new("X Quit")
+        .style(Style::default().fg(Color::White))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).title("Q"));
     f.render_widget(quit_button, control_chunks[3]);
