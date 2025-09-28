@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use mpris::{Player, PlayerFinder, PlaybackStatus};
+use log::{info, error};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackInfo {
@@ -55,7 +56,7 @@ impl MusicPlayer {
 
         // Try to find and connect to MPRIS players
         if let Err(e) = self.update_from_mpris() {
-            eprintln!("Failed to update from MPRIS: {}", e);
+            error!("Failed to update from MPRIS: {}", e);
         }
 
         self.last_update = std::time::Instant::now();
@@ -135,9 +136,9 @@ impl MusicPlayer {
     pub fn toggle_play_pause(&mut self) {
         if let Some(ref player) = self.current_player {
             if let Err(e) = player.play_pause() {
-                eprintln!("Failed to send PlayPause command: {}", e);
+                error!("Failed to send PlayPause command: {}", e);
             } else {
-                println!("Sent PlayPause command to {}", player.identity());
+                info!("Sent PlayPause command to {}", player.identity());
             }
         }
     }
@@ -145,9 +146,9 @@ impl MusicPlayer {
     pub fn next(&mut self) {
         if let Some(ref player) = self.current_player {
             if let Err(e) = player.next() {
-                eprintln!("Failed to send Next command: {}", e);
+                error!("Failed to send Next command: {}", e);
             } else {
-                println!("Sent Next command to {}", player.identity());
+                info!("Sent Next command to {}", player.identity());
             }
         }
     }
@@ -155,9 +156,9 @@ impl MusicPlayer {
     pub fn previous(&mut self) {
         if let Some(ref player) = self.current_player {
             if let Err(e) = player.previous() {
-                eprintln!("Failed to send Previous command: {}", e);
+                error!("Failed to send Previous command: {}", e);
             } else {
-                println!("Sent Previous command to {}", player.identity());
+                info!("Sent Previous command to {}", player.identity());
             }
         }
     }

@@ -15,20 +15,52 @@ use std::{
     io,
     time::{Duration, Instant},
     collections::HashMap,
+    fs::OpenOptions,
+    path::Path,
 };
-// Note: Image processing imports removed for now - using ASCII art placeholder instead
+use viuer;
+use log::{info, error};
 
 mod music;
 use music::MusicPlayer;
 
+// Initialize logging to file
+fn init_logging() -> Result<()> {
+    let log_file = "music-tray.log";
+    
+    // Create log file if it doesn't exist
+    if !Path::new(log_file).exists() {
+        std::fs::File::create(log_file)?;
+    }
+    
+    // Configure env_logger to write to file
+    env_logger::Builder::from_default_env()
+        .target(env_logger::Target::Pipe(Box::new(
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_file)?
+        )))
+        .init();
+    
+    info!("Music Tray application started");
+    Ok(())
+}
+
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize logging
+    init_logging()?;
+    
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+
+    info!("Terminal setup completed");
 
     // Create app and run
     let app = App::new();
@@ -44,18 +76,18 @@ async fn main() -> Result<()> {
     terminal.show_cursor()?;
 
     if let Err(err) = res {
-        println!("{err:?}");
+        error!("Application error: {err:?}");
     }
 
+    info!("Music Tray application ended");
     Ok(())
 }
 
 struct App {
     music_player: MusicPlayer,
     should_quit: bool,
-    cover_art_cache: HashMap<String, String>, // URL -> ASCII art representation
-    last_cover_url: Option<String>,
     button_positions: HashMap<String, (u16, u16, u16, u16)>, // button_name -> (x, y, width, height)
+    image_display_enabled: bool, // Track if terminal supports image display
 }
 
 impl App {
@@ -63,9 +95,8 @@ impl App {
         Self {
             music_player: MusicPlayer::new(),
             should_quit: false,
-            cover_art_cache: HashMap::new(),
-            last_cover_url: None,
             button_positions: HashMap::new(),
+            image_display_enabled: viuer::is_iterm_supported(),
         }
     }
 
@@ -106,19 +137,19 @@ impl App {
                 match button_name.as_str() {
                     "previous" => {
                         self.music_player.previous();
-                        println!("Previous button clicked");
+                        info!("Previous button clicked");
                     }
                     "play_pause" => {
                         self.music_player.toggle_play_pause();
-                        println!("Play/Pause button clicked");
+                        info!("Play/Pause button clicked");
                     }
                     "next" => {
                         self.music_player.next();
-                        println!("Next button clicked");
+                        info!("Next button clicked");
                     }
                     "quit" => {
                         self.should_quit = true;
-                        println!("Quit button clicked");
+                        info!("Quit button clicked");
                     }
                     _ => {}
                 }
@@ -190,18 +221,21 @@ fn ui(f: &mut Frame, app: &mut App) {
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
         .split(chunks[1]);
 
-    // Cover art area (left side) - Display ASCII art instead of URL
-    let cover_content = if let Some(ref cover_url) = app.music_player.get_current_track().cover_url {
-        if let Some(ascii_art) = app.cover_art_cache.get(cover_url) {
-            ascii_art.clone()
+    // Cover art area (left side) - Show simple placeholder for now
+    let cover_content = if app.music_player.get_current_track().cover_url.is_some() {
+        if app.image_display_enabled {
+            "🖼️\n\nImage Display\nSupported\n\n🖼️".to_string()
         } else {
-            // Generate ASCII art placeholder
-            let ascii_art = generate_ascii_art_placeholder();
-            app.cover_art_cache.insert(cover_url.clone(), ascii_art.clone());
-            ascii_art
+            "🖼️\n\nImage Display\nNot Supported\n\n🖼️".to_string()
         }
     } else {
         "🎵\n\nNo Cover\nAvailable\n\n🎵".to_string()
+    };
+    
+    let cover_title = if app.image_display_enabled {
+        "🎨 Cover Art (Image Display)"
+    } else {
+        "🎨 Cover Art (Text Mode)"
     };
     
     let cover_block = Paragraph::new(cover_content)
@@ -209,7 +243,7 @@ fn ui(f: &mut Frame, app: &mut App) {
         .alignment(Alignment::Center)
         .block(Block::default()
             .borders(Borders::ALL)
-            .title("🎨 Cover Art")
+            .title(cover_title)
             .title_style(Style::default().fg(Color::Yellow)));
     f.render_widget(cover_block, main_chunks[0]);
 
@@ -333,17 +367,4 @@ fn ui(f: &mut Frame, app: &mut App) {
     f.render_widget(quit_button, control_chunks[3]);
 }
 
-fn generate_ascii_art_placeholder() -> String {
-    // Generate a simple ASCII art placeholder for cover art
-    r#"
-    ╔═══════════╗
-    ║           ║
-    ║     🎵     ║
-    ║   Music    ║
-    ║   Cover    ║
-    ║           ║
-    ╚═══════════╝
-    "#
-    .to_string()
-}
 

@@ -57,21 +57,11 @@ cargo run
 - 需要真正的 D-Bus 查询实现
 - 封面艺术显示待完善
 
-### 📋 扩展计划
-详细的 MPRIS 实现说明请参考 [MPRIS_IMPLEMENTATION.md](MPRIS_IMPLEMENTATION.md)
-
 ## 平台支持
 
 ### ✅ Linux
 - 完整的 MPRIS 支持
 - 所有音乐播放器集成功能
-
-### ⚠️ macOS
-- 基础 TUI 功能可用
-- MPRIS 功能需要 Linux 环境
-- 建议在 Linux 虚拟机中运行
-
-详细的平台兼容性说明请参考 [PLATFORM_NOTES.md](PLATFORM_NOTES.md)
 
 ## 项目结构
 
