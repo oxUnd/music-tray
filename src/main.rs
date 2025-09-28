@@ -97,7 +97,7 @@ struct App {
     music_player: MusicPlayer,
     should_quit: bool,
     button_positions: HashMap<String, (u16, u16, u16, u16)>, // button_name -> (x, y, width, height)
-    image: Option<Box<dyn StatefulProtocol>>,
+    image: Option<StatefulProtocol>,
     picker: Option<Picker>,
     current_cover_url: Option<String>,
 }
@@ -134,7 +134,7 @@ impl App {
                 
                 // Initialize picker if not already done
                 if self.picker.is_none() {
-                    match Picker::from_termios() {
+                    match Picker::from_query_stdio() {
                         Ok(picker) => {
                             self.picker = Some(picker);
                             info!("Initialized image picker");
@@ -153,7 +153,7 @@ impl App {
                     if let Some(ref mut picker) = self.picker {
                         match fs::File::open(&file_path) {
                             Ok(file) => {
-                                let reader = image::io::Reader::new(BufReader::new(file)).with_guessed_format();
+                                let reader = image::ImageReader::new(BufReader::new(file)).with_guessed_format();
                                 match reader {
                                     Ok(reader) => {
                                         let format = reader.format();
@@ -161,8 +161,8 @@ impl App {
                                         
                                         match reader.decode() {
                                             Ok(dyn_img) => {
-                                                let image = picker.new_resize_protocol(dyn_img);
-                                                self.image = Some(image);
+                                                let protocol = picker.new_resize_protocol(dyn_img);
+                                                self.image = Some(protocol);
                                                 self.current_cover_url = Some(cover_url.clone());
                                                 info!("Successfully loaded cover image: {} (format: {:?})", file_path, format);
                                             }
@@ -326,7 +326,7 @@ fn ui(f: &mut Frame, app: &mut App) {
             Constraint::Min(10),   // Main content
             Constraint::Length(5), // Controls
         ])
-        .split(f.size());
+        .split(f.area());
 
     // Title
     let title = Paragraph::new("🎵 Music Tray")
@@ -353,10 +353,10 @@ fn ui(f: &mut Frame, app: &mut App) {
     // Get the inner area for content (excluding borders and title)
     let inner_area = cover_block.inner(main_chunks[0]);
     
-    if let Some(ref mut image_protocol) = app.image {
+    if let Some(ref mut protocol) = app.image {
         // Render the loaded image in the inner area
-        let image_widget = StatefulImage::new(None);
-        f.render_stateful_widget(image_widget, inner_area, image_protocol);
+        let image_widget = StatefulImage::new();
+        f.render_stateful_widget(image_widget, inner_area, protocol);
     } else {
         // Show placeholder when no image is available
         let track_info = app.music_player.get_current_track();
