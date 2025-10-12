@@ -2,6 +2,9 @@
 
 A small music control tool for Linux operating systems that can display the content of songs currently playing in music software, including music cover, song title, and playback progress, with buttons for previous track, next track, pause and play.
 
+
+![screen](docs/screenshot-2025-10-12_17-31-45.png)
+
 ## Features
 - 🎵 Display current playing music information (song title, artist, album)
 - ⏯️ Music control (play/pause, previous track, next track)
